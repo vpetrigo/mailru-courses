@@ -4,6 +4,8 @@ SRC = deque.cpp
 OBJ = $(subst .cpp,.o,$(SRC))
 EXEC = $(subst .o,.exe,$(OBJ))
 
+.PHONY: all clean
+
 all: $(EXEC)
 
 %.exe: %.o
@@ -11,3 +13,6 @@ all: $(EXEC)
 
 %.o: %.cpp
 	@$(CXX) -c $< $(CXX_FLAGS)
+
+clean:
+	@rm -f *.exe *.o
