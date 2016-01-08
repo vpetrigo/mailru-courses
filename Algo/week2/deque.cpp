@@ -30,8 +30,8 @@
 #include <algorithm>
 #include <deque>
 #include <stdexcept>
-#include <cstring>
 
+template <typename T>
 class Deque {
 public:
   Deque() : buffer{nullptr}, dsize{0}, dcapacity{0}, head{0}, end{0} {
@@ -43,15 +43,15 @@ public:
     }
   }
 
-  using value_type = int;
+  using value_type = T;
 
-  void push_back(int e) {
+  void push_back(T e) {
     if (capacity() == 0) {
       init_buffer();
     }
 
     if (!empty()) {
-      if ((end + 1) % dcapacity == head) {
+      if (size() + 1 == capacity()) {
         // alloc new buffer and copy existing data
         reserve(mem_size * dcapacity);
       }
@@ -62,13 +62,13 @@ public:
     ++dsize;
   }
 
-  void push_front(int e) {
+  void push_front(T e) {
     if (capacity() == 0) {
       init_buffer();
     }
 
     if (!empty()) {
-      if (head - 1 == end || (head == 0 && dcapacity - 1 == end)) {
+      if (size() + 1 == capacity()) {
         // alloc new buffer and copy existing data
         reserve(mem_size * dcapacity);
       }
@@ -125,7 +125,7 @@ public:
   void reserve(const size_t size) {
     if (size > dcapacity) {
       const int new_cap = size;
-      int *new_buf = new(std::nothrow) int[new_cap];
+      T *new_buf = new(std::nothrow) T[new_cap];
       if (!new_buf) {
         throw std::bad_alloc {};
       }
@@ -170,7 +170,7 @@ private:
 
   void init_buffer() {
     dcapacity = mem_size;
-    buffer = new int[dcapacity];
+    buffer = new T[dcapacity];
   }
 
   void copy_to_new_buffer(int *new_buf, const int buf_length) {
@@ -183,7 +183,7 @@ private:
     }
   }
 
-  int *buffer;
+  T *buffer;
   size_t dsize;
   size_t dcapacity;
   int head;
@@ -191,7 +191,7 @@ private:
 };
 
 int main() {
-  Deque d;
+  Deque<int> d;
   // std::deque<int> d;
   int n;
   int cmd;
