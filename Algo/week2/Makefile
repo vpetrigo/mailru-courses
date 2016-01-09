@@ -1,6 +1,7 @@
 CXX = clang++
 CXX_FLAGS = -std=c++11 -O2
-SRC = deque.cpp
+HEADERS = Deque.hpp
+SRC = deque.cpp bracket.cpp
 OBJ = $(subst .cpp,.o,$(SRC))
 EXEC = $(subst .o,.exe,$(OBJ))
 
@@ -10,6 +11,9 @@ all: $(EXEC)
 
 %.exe: %.o
 	@$(CXX) -o $@ $<
+
+bracket.o: bracket.cpp $(HEADERS)
+	@$(CXX) -c $< $(CXX_FLAGS)
 
 %.o: %.cpp
 	@$(CXX) -c $< $(CXX_FLAGS)
