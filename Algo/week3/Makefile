@@ -1,6 +1,6 @@
 CXX = clang++
 CXX_FLAGS = -std=c++11
-SRC = heap.cpp insertion_sort.cpp
+SRC = heap.cpp insertion_sort.cpp mergesort.cpp
 OBJ = $(subst .cpp,.o,$(SRC))
 EXEC = $(subst .cpp,.exe,$(SRC))
 
