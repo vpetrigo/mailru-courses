@@ -25,9 +25,12 @@ constexpr int begin_segment = -1;
 constexpr int end_segment = 1;
 
 template <typename It>
-std::vector<typename std::iterator_traits<It>::value_type> merge(It begin, It mid, It end) {
+using iterator_traits_t = typename std::iterator_traits<It>::value_type;
+
+template <typename It>
+std::vector<iterator_traits_t<It>> merge(It begin, It mid, It end) {
     // init both parts pointers to the begining and to the ending
-    std::vector<typename std::iterator_traits<It>::value_type> sorted;
+    std::vector<iterator_traits_t<It>> sorted;
     auto first_begin = begin;
     auto second_begin = mid;
     const auto first_end = mid;
@@ -65,23 +68,24 @@ void merge_sort(It begin, It end) {
 }
 
 int check_segments(const std::vector<std::pair<int, int>>& v) {
-    int layer = 0;
+    int prev_layer = 0;
+    int cur_layer = 0;
     int dist = 0;
     
     for (size_t i = 0; i < v.size(); ++i) {
         if (v[i].second == begin_segment) {
-            if (layer == 1) {
-                dist += v[i].first - v[i - 1].first;
-            }
-            
-            ++layer;
+            ++cur_layer;
         }
         else {
-            --layer;
-            if (layer == 0) {
-                dist += v[i].first - v[i - 1].first;
-            }
+            --cur_layer;
         }
+        // prev_layer == 1 and cur_layer == 2 when we get to the overlap segment
+        // prev_layer == 1 and cur_layer == 0 when we get to the end of nonoverlaped segment
+        if ((prev_layer == 1 && cur_layer == 2) || (prev_layer == 1 && cur_layer == 0)) {
+            dist += v[i].first - v[i - 1].first;
+        }
+        
+        prev_layer = cur_layer;
     }
     
     return dist;
