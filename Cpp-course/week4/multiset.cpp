@@ -1,3 +1,18 @@
+/*
+ * Author: vpetrigo
+ * Task:
+ * В классе «Мультимножество целых чисел» – Multiset перегрузить операции сложения,
+ * вычитания, умножения (пересечения), индексирования, присваивания и вывода на экран.
+ * Создать массив объектов и передавать пары объектов в функцию, которая строит мультимножество,
+ * состоящее из элементов, входящих только в одно из заданных множеств, т. е.  (A∪B) \ (A∩B),
+ * и возвращает его в основную программу (использовать при этом реализованные перегруженные операции).
+ *
+ * Sample Input:
+ * (1,2,3,4),(2,3,5,6)
+ * Sample Output:
+ * (1,4,5,6)
+ */
+
 #include <iostream>
 #include <vector>
 #include <array>
@@ -9,6 +24,9 @@
 class Multiset {
 public:
   Multiset() {}
+
+  template <typename CIt>
+  Multiset(CIt begin, CIt end) : data{begin, end} {}
 
   Multiset(const std::initializer_list<int>& il) : data{il} {
     std::sort(data.begin(), data.end());
@@ -91,13 +109,13 @@ int main() {
 
   // read a "(X,X,X,X)" sequence
   std::cin >> ch >> a[0] >> ch >> a[1] >> ch >> a[2] >> ch >> a[3] >> ch;
-  Multiset m1{a[0], a[1], a[2], a[3]};
+  Multiset m1 {a.cbegin(), a.cend()};
 
   // read a delimeter ','
   std::cin >> ch;
   std::cin >> ch >> a[0] >> ch >> a[1] >> ch >> a[2] >> ch >> a[3] >> ch;
 
-  Multiset m2{a[0], a[1], a[2], a[3]};
+  Multiset m2 {a.cbegin(), a.cend()};
   Multiset un = m1 + m2;
   Multiset cr = m1 - m2;
 
