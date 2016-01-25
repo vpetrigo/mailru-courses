@@ -79,8 +79,8 @@ Multiset operator+(const Multiset& m1, const Multiset& m2) {
     }
   }
 
-  std::copy(cit_m1, m1.data.cend(), std::back_inserter(res.data));
-  std::copy(cit_m2, m2.data.cend(), std::back_inserter(res.data));
+  res.data.insert(res.data.end(), cit_m1, m1.data.cend());
+  res.data.insert(res.data.end(), cit_m2, m2.data.cend());
 
   return res;
 }
