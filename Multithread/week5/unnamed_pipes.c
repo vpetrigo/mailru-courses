@@ -6,6 +6,12 @@
 #include <ctype.h>
 #include <inttypes.h>
 
+// http://stackoverflow.com/questions/8082932/connecting-n-commands-with-pipes-in-a-shell
+
+struct command {
+  char **argv;
+};
+
 char *check_pipe_sym(const char *line) {
   static const char *pipe_sym = "|";
   // do we have a pipe symbol in our input line
@@ -43,8 +49,10 @@ char **get_argv(const char *line, size_t len) {
       ++cnt;
     }
 
+    // increment because we are on the space character
     ++ptr;
     strncpy(arg_arr[arr_idx], line + prev_pos, cnt);
+    // start from the next character after a space
     prev_pos = cur_pos + 1;
     ++arr_idx;
   }
@@ -63,8 +71,10 @@ int main() {
   printf("Read %s (size: %Iu)\n", line, input_len);
 
   if (input_len != 0) {
-    if (check_pipe_sym(line)) {
+    char *ptr = NULL;
+    if ((ptr = check_pipe_sym(line)) != NULL) {
       // Handle several programs
+      printf("HERE\n");
     }
     else {
       char **arguments = get_argv(line, input_len);
