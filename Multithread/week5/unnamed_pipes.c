@@ -6,6 +6,7 @@
 #include <ctype.h>
 #include <inttypes.h>
 #include <sys/types.h>
+#include <fcntl.h>
 
 // http://stackoverflow.com/questions/8082932/connecting-n-commands-with-pipes-in-a-shell
 
@@ -123,16 +124,16 @@ int spawn_proc (int in, int out, struct command *cmd) {
 
   if ((pid = fork()) == 0) {
     if (in != 0) {
-      dup2 (in, 0);
-      close (in);
+      dup2(in, 0);
+      close(in);
     }
 
     if (out != 1) {
-      dup2 (out, 1);
-      close (out);
+      dup2(out, 1);
+      close(out);
     }
 
-    return execvp (cmd->argv [0], (char * const *)cmd->argv);
+    return execvp (cmd->argv[0], (char * const *)cmd->argv);
   }
 
   return pid;
@@ -146,25 +147,27 @@ int fork_pipes(struct command *cmds, size_t num_of_cmds) {
   int in = 0;
 
   /* Note the loop bound, we spawn here all, but the last stage of the pipeline.  */
-  for (i = 0; i < num_of_cmds - 1; ++i)
-    {
-      pipe(fd);
+  for (i = 0; i < num_of_cmds - 1; ++i) {
+    pipe(fd);
 
-      /* f[1] is the write end of the pipe, we carry `in` from the prev iteration.  */
-      spawn_proc(in, fd[1], cmds + i);
+    /* f[1] is the write end of the pipe, we carry `in` from the prev iteration.  */
+    spawn_proc(in, fd[1], cmds + i);
 
-      /* No need for the write end of the pipe, the child will write here.  */
-      close(fd[1]);
+    /* No need for the write end of the pipe, the child will write here.  */
+    close(fd[1]);
 
-      /* Keep the read end of the pipe, the next child will read from there.  */
-      in = fd[0];
-    }
+    /* Keep the read end of the pipe, the next child will read from there.  */
+    in = fd[0];
+  }
 
   /* Last stage of the pipeline - set stdin be the read end of the previous pipe
      and output to the original file descriptor 1. */
-  if (in != 0)
+  if (in != 0) {
     dup2(in, 0);
+  }
 
+  int file_fd = open("/home/box/result.out", O_WRONLY | O_CREAT, 0666);
+  dup2(file_fd, 1);
   /* Execute the last stage with the current process. */
   return execvp(cmds[i].argv[0], (char * const *)cmds[i].argv);
 }
@@ -175,7 +178,7 @@ int main() {
   fgets(line, LINE_SIZE, stdin);
   size_t input_len = strlen(line);
 
-  printf("Read %s (size: %Iu)\n", line, input_len);
+  // printf("Read %s (size: %zu)\n", line, input_len);
 
   if (input_len != 0) {
     char *delim_pos = NULL;
@@ -187,18 +190,22 @@ int main() {
       size_t q_cmd = count_commands(line, input_len, delim_pos, d_pos);
       struct command *cmds = parse_commands(line, q_cmd, d_pos);
 
-      for (size_t i = 0; i < q_cmd; ++i) {
-        printf("Command: %s ", cmds[i].argv[0]);
-        for (size_t j = 1; cmds[i].argv[j] != NULL; ++j) {
-          printf("Args: %s; ", cmds[i].argv[j]);
-        }
-        putchar('\n');
-      }
+      // for (size_t i = 0; i < q_cmd; ++i) {
+      //   printf("Command: %s ", cmds[i].argv[0]);
+      //   for (size_t j = 1; cmds[i].argv[j] != NULL; ++j) {
+      //     printf("Args: %s; ", cmds[i].argv[j]);
+      //   }
+      //   putchar('\n');
+      // }
 
       fork_pipes(cmds, q_cmd);
     }
     else {
       struct command cmd = get_argv(line, input_len);
+
+      int file_fd = open("/home/box/result.out", O_WRONLY | O_CREAT, 0666);
+      dup2(file_fd, 1);
+
       execvp(cmd.argv[0], cmd.argv);
 
       free(cmd.argv[0]);
