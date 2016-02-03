@@ -8,8 +8,6 @@
 #include <sys/types.h>
 #include <fcntl.h>
 
-// http://stackoverflow.com/questions/8082932/connecting-n-commands-with-pipes-in-a-shell
-
 #define LINE_SIZE 1024
 
 struct command {
@@ -42,6 +40,15 @@ size_t skip_whitespace(const char *str) {
   return count;
 }
 
+void free_commands(struct command *cmds, const size_t num_of_commands) {
+  for (size_t i = 0; i < num_of_commands; ++i) {
+    free(cmds[i].argv[0]);
+    free(cmds[i].argv);
+  }
+
+  free(cmds);
+}
+
 void set_null(char **arg_arr, const size_t start_idx, const size_t end_idx) {
   if (end_idx <= start_idx) {
     return;
@@ -52,12 +59,11 @@ void set_null(char **arg_arr, const size_t start_idx, const size_t end_idx) {
   }
 }
 
-size_t count_commands(const char *input_line, size_t input_len, char *delim_pos, size_t *delim_positions) {
-  ptrdiff_t cmd_size = delim_pos - input_line;
-  size_t commands_cnt = 1;
+size_t count_commands(const char *input_line, size_t input_len, size_t *delim_positions) {
+  size_t commands_cnt = 0;
   size_t dp_idx = 1;
-
-  delim_positions[dp_idx++] = cmd_size;
+  char *delim_pos = NULL;
+  ptrdiff_t cmd_size = 0;
 
   while ((delim_pos = check_pipe_sym(input_line + cmd_size + 1)) != NULL) {
     cmd_size = delim_pos - input_line;
@@ -73,8 +79,8 @@ size_t count_commands(const char *input_line, size_t input_len, char *delim_pos,
 
 struct command get_argv(const char *line, size_t len) {
   struct command cmd;
-  cmd.argv = (char **) calloc(len, sizeof(char *));
-  cmd.argv[0] = (char *) calloc(len * len, sizeof(char));
+  cmd.argv = calloc(len, sizeof(char *));
+  cmd.argv[0] = calloc(len * len, sizeof(char));
 
   for (size_t i = 1; i < len; ++i) {
     cmd.argv[i] = cmd.argv[i - 1] + len;
@@ -109,7 +115,7 @@ struct command get_argv(const char *line, size_t len) {
 }
 
 struct command *parse_commands(const char *input_line, size_t q_cmd, size_t *char_pos) {
-  struct command *cmds = (struct command *) calloc(q_cmd, sizeof(struct command));
+  struct command *cmds = calloc(q_cmd, sizeof(struct command));
 
   for (size_t i = 0; i < q_cmd; ++i) {
     size_t offset = (i != 0) ? 1 : 0;
@@ -119,17 +125,17 @@ struct command *parse_commands(const char *input_line, size_t q_cmd, size_t *cha
   return cmds;
 }
 
-int spawn_proc (int in, int out, struct command *cmd) {
+int spawn_proc(int in, int out, struct command *cmd) {
   pid_t pid;
 
   if ((pid = fork()) == 0) {
-    if (in != 0) {
-      dup2(in, 0);
+    if (in != STDIN_FILENO) {
+      dup2(in, STDIN_FILENO);
       close(in);
     }
 
-    if (out != 1) {
-      dup2(out, 1);
+    if (out != STDOUT_FILENO) {
+      dup2(out, STDOUT_FILENO);
       close(out);
     }
 
@@ -145,17 +151,13 @@ int fork_pipes(struct command *cmds, size_t num_of_cmds) {
 
   /* The first process should get its input from the original file descriptor 0.  */
   int in = 0;
-
   /* Note the loop bound, we spawn here all, but the last stage of the pipeline.  */
   for (i = 0; i < num_of_cmds - 1; ++i) {
     pipe(fd);
-
     /* f[1] is the write end of the pipe, we carry `in` from the prev iteration.  */
     spawn_proc(in, fd[1], cmds + i);
-
     /* No need for the write end of the pipe, the child will write here.  */
     close(fd[1]);
-
     /* Keep the read end of the pipe, the next child will read from there.  */
     in = fd[0];
   }
@@ -166,10 +168,10 @@ int fork_pipes(struct command *cmds, size_t num_of_cmds) {
     dup2(in, 0);
   }
 
-  int file_fd = open("/home/box/result.out", O_WRONLY | O_CREAT, 0666);
+  int file_fd = open("/home/vpetrigo/result.out", O_WRONLY | O_CREAT, 0666);
   dup2(file_fd, 1);
   /* Execute the last stage with the current process. */
-  return execvp(cmds[i].argv[0], (char * const *)cmds[i].argv);
+  return execvp(cmds[i].argv[0], cmds[i].argv);
 }
 
 int main() {
@@ -181,36 +183,15 @@ int main() {
   // printf("Read %s (size: %zu)\n", line, input_len);
 
   if (input_len != 0) {
-    char *delim_pos = NULL;
-    if ((delim_pos = check_pipe_sym(line)) != NULL) {
-      // Handle several programs
-      size_t d_pos[input_len];
-      memset(d_pos, 0, input_len * sizeof(size_t));
+    // Handle several programs
+    size_t d_pos[input_len];
+    memset(d_pos, 0, input_len * sizeof(size_t));
 
-      size_t q_cmd = count_commands(line, input_len, delim_pos, d_pos);
-      struct command *cmds = parse_commands(line, q_cmd, d_pos);
+    size_t q_cmd = count_commands(line, input_len, d_pos);
+    struct command *cmds = parse_commands(line, q_cmd, d_pos);
 
-      // for (size_t i = 0; i < q_cmd; ++i) {
-      //   printf("Command: %s ", cmds[i].argv[0]);
-      //   for (size_t j = 1; cmds[i].argv[j] != NULL; ++j) {
-      //     printf("Args: %s; ", cmds[i].argv[j]);
-      //   }
-      //   putchar('\n');
-      // }
-
-      fork_pipes(cmds, q_cmd);
-    }
-    else {
-      struct command cmd = get_argv(line, input_len);
-
-      int file_fd = open("/home/box/result.out", O_WRONLY | O_CREAT, 0666);
-      dup2(file_fd, 1);
-
-      execvp(cmd.argv[0], cmd.argv);
-
-      free(cmd.argv[0]);
-      free(cmd.argv);
-    }
+    fork_pipes(cmds, q_cmd);
+    free_commands(cmds, q_cmd);
   }
 
   return 0;
