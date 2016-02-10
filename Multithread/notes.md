@@ -159,3 +159,49 @@ int pthread_cancel(pthread_t pthread);
 `read`, `waitpid` и т.д. Если мы используем конструкцию `while (true) {}`, то поток мы не сможем убить.
 Функции `pthread_*`, `free`, `malloc`, `realloc`, `calloc` не являются точками завершения.
 Мы можем самостоятельно установить точку завершения с помощью функции `void pthread_testcancel(void)`.
+
+Ещё один момент:
+
+```
+|
+| pthread_create
+x---------
+|         |
+|         |
+x----
+|    |    |
+|    |    |
+|    x--->|---- pthread_join
+|     ----|----> join вернул *retval = PTHREAD_CANCELED
+x----x--->|---- pthread_cancel
+|    |
+|    |
+```
+
+Есть также параметры потока, которые мы можем установить находясь внутри него.
+
+```cpp
+int pthread_cancelstate(int state, int *oldstate);
+```
+
+_state_ - PTHREAD_CANCEL_ENABLED - можем отменять выполнение потока с помощью
+`pthread_cancel`. PTHREAD_CANCEL_DISABLED - поток не может быть завершен с помощью
+`pthread_cancel`.
+
+```cpp
+int pthread_canceltype(int type, int *oldtype);
+```
+
+_type_ - может принимать два значения:
+
+* PTHREAD_CANCEL_DEFERED - стандартный режим с точками завершения
+* PTHREAD_CANCEL_ASYNCHRONOUS - в этом режиме мы не ждем точку завершения, а можем сразу
+прервать работу потока.
+
+Для установки функции, которая будет вызываться при завершении работы потока имеются
+следующие вызовы:
+
+```cpp
+void pthread_cleanup_push(...); // для установки функции
+void pthread_cleanup_pop(...); // для сброса
+```
