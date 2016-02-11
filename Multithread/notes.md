@@ -184,8 +184,11 @@ x----x--->|---- pthread_cancel
 int pthread_cancelstate(int state, int *oldstate);
 ```
 
-_state_ - PTHREAD_CANCEL_ENABLED - можем отменять выполнение потока с помощью
-`pthread_cancel`. PTHREAD_CANCEL_DISABLED - поток не может быть завершен с помощью
+_state_ - принимает два значения:
+
+* `PTHREAD_CANCEL_ENABLED` - можем отменять выполнение потока с помощью
+`pthread_cancel`.
+* `PTHREAD_CANCEL_DISABLED` - поток не может быть завершен с помощью
 `pthread_cancel`.
 
 ```cpp
