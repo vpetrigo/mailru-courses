@@ -205,3 +205,104 @@ _type_ - может принимать два значения:
 void pthread_cleanup_push(...); // для установки функции
 void pthread_cleanup_pop(...); // для сброса
 ```
+
+## Мьютексы
+
+Потоки являются частью одного процесса и вся память процесса является для них общей.
+Как из разных потоков работать с общей памятью? Для этого существует несколько способов и
+один из них это использование **мьютексов**.
+
+Мьютекс как бинарный семафор (флаг), может находится либо в активном состоянии («1»), либо
+в неактивном («0»). Это позволяет только одному процессу работать с каким-либо общим ресурсом
+в конкретный момент времени.
+
+Для создания мьютекса используется:
+
+```cpp
+pthread_mutex_t m = PTHREAD_MUTEX_INITIALIZER; // создание мьютекса
+
+int pthread_mutex_init(pthread_mutex_t *mp, pthread_mutex_attr_t *mattrp); // инициализация памяти под мьютекс
+```
+
+Для удаления мьютекса используется функция:
+
+```cpp
+int pthread_mutex_destroy(pthread_mutex_t *mp);
+```
+
+Пример работы потоков с мьютексом:
+
+```
+|   |
+|   |
+x <-|--- lock_1
+|   o <- lock_2
+|   -    поток 2 спит
+|   -    поток 2 спит
+x <-x--- unlock_1 / lock_2
+```
+
+Для работы с блокировками мьютекса существуют следующие функции:
+
+```cpp
+int pthread_mutex_lock(pthread_mutex_t *mp); // lock в блокирующем режиме
+int pthread_mutex_trylock(pthread_mutex_t *mp); // lock в неблокирующем режиме
+                                                // в случае, если мьютекс занят, то вернется отказ
+int pthread_mutex_unlock(pthread_mutex_t *mp); // снятие блокировки
+```
+
+### spin-блокировки
+
+При работе с блокировками, если время работы первого процесса мало, то вместо того, чтобы заснуть и ожидать
+освобождения мьютекса, целесообразнее использовать spin-блокировку. В этом случае другой поток, ожидающий
+разблокировки мьютекса в бесконечном цикле постоянно проверяет мьютекс и «греет камень».
+
+```
+pthread_spin_lock_t psl;
+
+int pthread_spin_init(pthread_spin_lock_t *lock, int pshared); // инициализация
+```
+
+spin-локи могут работать для синхронизации потоков в одном процессе, так и для синхронизации
+потоков разных процессов! То есть можно синхронизировать процессы. В таком случае
+переменная `pshared` должна принять значение `PTHREAD_PROCESS_SHARED`.
+Если же `pshared` равно `PTHREAD_PROCESS_PRIVATE`, то в таком случае spin-lock используется в
+рамках одного процесса.
+
+Для уничтожения spin-lock'а используется:
+
+```cpp
+int pthread_spin_destroy(pthread_spin_lock_t *lock);
+```
+
+Для работы со spin-блокировками используются функции:
+
+```cpp
+int pthread_spin_destroy(pthread_spin_lock_t *lock);
+int pthread_spin_lock(pthread_spin_lock_t *lock); // занять spin-lock (в блокирующем режиме)
+int pthread_spin_trylock(pthread_spin_lock_t *lock); // занять spin-lock (в неблокирующем режиме)
+int pthread_spin_unlock(pthread_spin_lock_t *lock); // освободить spin-lock
+```
+
+**Важно!** Если блокировки короткие по времени, то рекомендуется использовать spin-блокировки
+вместо засыпания потока.
+
+### Блокировки на запись и на чтение
+
+* [PTHREAD_RWLOCK](https://www.daemon-systems.org/man/pthread_rwlock.3.html)
+
+```cpp
+pthread_rwlock_t *rwlock = PTHREAD_RWLOCK_INITIALIZER;
+
+pthread_rwlock_init(...);
+pthread_rwlock_destroy(...);
+```
+
+Установка блокировок на чтение и запись:
+
+```cpp
+int pthread_rwlock_rdlock(*rwlock);
+int pthread_rwlock_tryrdlock(*rwlock);
+int pthread_rwlock_wrlock(*rwlock);
+int pthread_rwlock_trywrlock(*rwlock);
+```
