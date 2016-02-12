@@ -118,7 +118,7 @@ _detachstate_ - может быть двух типов - `PTHREAD_CREATE_JOINAB
 
 ### Завершение потоков
 
-Бывет явным и неявным. Пример неявного завершения:
+Бывает явным и неявным. Пример неявного завершения:
 
 ```cpp
 void *thread_func(void *arg) {
@@ -309,3 +309,5 @@ int pthread_rwlock_tryrdlock(*rwlock);
 int pthread_rwlock_wrlock(*rwlock);
 int pthread_rwlock_trywrlock(*rwlock);
 ```
+
+### Условные переменные. Барьеры
