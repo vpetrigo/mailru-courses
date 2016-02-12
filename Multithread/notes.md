@@ -311,3 +311,66 @@ int pthread_rwlock_trywrlock(*rwlock);
 ```
 
 ### Условные переменные. Барьеры
+
+Пример использования условных переменных:
+
+```
+|     |
+|     |
+|     |
+x <---|---- Поток 1 устанавливает условную переменную
+- сон |
+-     |
+-     |
+|<----|---- Поток 2 пробуждает Поток 1
+```
+
+Создание условной переменной:
+
+```cpp
+int pthread_cond_init(pthread_cond_t * restrict cond, pthread_condattr_t * restrict attr);
+// для удаления
+int pthread_cond_destroy(pthread_cond_t *cond);
+// если переменная создается на стеке
+pthread_cond_t cond = PTHREAD_COND_INITIALIZER;
+```
+
+Для того, чтобы работать с условными переменными, необходимо создать мьютекс. После этого
+можно использовать следующую функцию:
+
+```cpp
+// встать на ожидание
+int pthread_cond_wait(pthread_cond_t *cond, pthread_mutex_t *mutex);
+// встать на ожидание с таймаутом
+int pthread_cond_timedwait(pthread_cond_t *cond, pthread_mutex_t *mutex, const struct timespec * restrict abstime);
+```
+
+Сигнализировать о прекращении ожидания можно либо одному потоку, либо всем сразу.
+
+```cpp
+// для отправки сигнала конкретному потоку
+int pthread_cond_signal(pthread_cond_t *cond);
+// для отправки сигнала всем спящим потокам
+int pthread_cond_broadcast(pthread_cond_t *cond);
+```
+
+Создание барьеров позволяет пробуждать все потоки, при достижении определенного числа заснувших потоков.
+
+```cpp
+// инициализация барьера
+int pthread_barier_init(pthread_barrier_t *bp, pthread_barrierattr_t *attr, unsigned count);
+// уничтожение барьера
+int pthread_barrier_destroy(pthread_barrier_t *bp);
+// ожидание достижения count-спящих потоков
+int pthread_barrier_wait(pthread_barrier_t *bp);
+```
+
+### Однократный запуск потоков
+
+Если из нескольких потоков запускается одна и таже процедура, но мы хотим, чтобы она вызвалась только
+один раз, то можно использовать однократный запуск:
+
+```cpp
+pthread_once_t once_control = PTHREAD_ONCE_INIT;
+int pthread_once(pthread_once_t *ocp, void (*init_routine)(void));
+```
