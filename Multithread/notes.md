@@ -358,7 +358,7 @@ int pthread_cond_broadcast(pthread_cond_t *cond);
 
 ```cpp
 // инициализация барьера
-int pthread_barier_init(pthread_barrier_t *bp, pthread_barrierattr_t *attr, unsigned count);
+int pthread_barrier_init(pthread_barrier_t *bp, pthread_barrierattr_t *attr, unsigned count);
 // уничтожение барьера
 int pthread_barrier_destroy(pthread_barrier_t *bp);
 // ожидание достижения count-спящих потоков
