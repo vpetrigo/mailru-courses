@@ -374,3 +374,48 @@ int pthread_barrier_wait(pthread_barrier_t *bp);
 pthread_once_t once_control = PTHREAD_ONCE_INIT;
 int pthread_once(pthread_once_t *ocp, void (*init_routine)(void));
 ```
+
+### C++11 Threads
+
+Для создания потоков в C++11 можно использовать класс `thread` (определен в заголовочном файле
+<thread>).
+
+```cpp
+std::thread t(ThreadFunc);
+// прототип функции потока
+void ThreadFunc(void);
+```
+
+Если необходимо передавать дополнительные параметры в функцию, то можно их указать при
+объявлении потока:
+
+```cpp
+std::thread t(ThreadFunc, 16, 3.14, "Hello");
+// прототип функции
+void ThreadFunc(int i, double d, std::string s);
+```
+
+Все передаваемые значения будут скопированы в функцию потока. Чтобы этого избежать
+можно использовать обертку `std::ref`:
+
+```cpp
+std::thread t(ThreadFunc, std::ref(i), std::ref(d));
+// если не использовать std::ref, то даже с такой сигнатурой функции все значения будут копироваться
+void ThreadFunc(int& i, double& d);
+```
+
+Кроме обычных определений функций можно определять соответствующие классы с перегруженным
+оператором круглые скобки `void operator()() {}` или же использовать лямбды.
+
+```cpp
+std::thread t([]() {...});
+```
+
+Для работы с потоками используются методы:
+
+```cpp
+std::thread t(...);
+
+t.join();
+t.detach();
+```
