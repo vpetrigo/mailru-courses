@@ -419,3 +419,382 @@ std::thread t(...);
 t.join();
 t.detach();
 ```
+
+* [C++11 Thread документация](http://en.cppreference.com/w/cpp/thread)
+
+## Параллельное программирование
+
+1. OpenMP
+2. Intel Threading Building Blocks (TBB)
+3. MPI
+
+1, 2 подход - это подходы к программированию с общей памятью, а 3 - с использованием
+сообщений.
+
+### OpenMP
+
+* [Поддерживаемые компиляторы](http://openmp.org/wp/openmp-compilers/)
+* [GNU libomp docs](https://gcc.gnu.org/onlinedocs/libgomp/)
+* [OpenMP Tutorials](https://computing.llnl.gov/tutorials/openMP/)
+* [Подводные камни OpenMP](http://www.viva64.com/ru/a/0054/)
+
+
+С помощью специальной директивы `pragma` можно запустить необходимый участок кода в нескольких
+потоках. Например:
+
+```cpp
+#include <iostream>
+
+int main() {
+  // Запуск в несколько потоков
+  #pragma omp parallel
+  {
+    std::cout << "Hello, world!" << std::endl;
+  }
+  return 0;
+}
+
+```
+
+Для задания количества потоков:
+
+*	непосредственно в директиве `#pragma` - `#pragma omp parallel num_threads(4)`
+* до директивы `#pragma` - `omp_set_num_threads(4)`
+* с помощью `export` - `export OMP_NUM_THREADS=4`
+
+В итоге мы получили следующую схему выполнения программы:
+
+```
+      |
+      |
+      |
+---------------
+|   |    |    |
+|   |    |    |
+|   |    |    |
+---------------
+      |
+      |
+      |
+```
+
+Для того, чтобы подключить OpenMP следует использовать следующие флаги:
+
+```
+gcc -fopenmp
+Intel: -openmp (Linux, MacOSX), -Qopenmp (Windows)
+Microsoft: -openmp (настройки проекта в Visual Studio)
+```
+
+### Переменные
+
+При использовании директивы `pragma` мы создаем новую область видимости. И переменные в такой области
+могут быть как глобальными (единственный экземпляр для всех потоков), так и внутренними (для каждого
+потока – своя переменная). Это необходимо явно указывать в директиве `pragma`:
+
+```cpp
+#pragma omp parallel shared(A, B, C) private(i, n)
+// shared - глобальные переменные. Видны всем
+// private - внутренняя переменые. У каждого потока своя переменная
+```
+
+### Циклы
+
+```cpp
+#pragma omp parallel for {
+  for (int i = 0; i < 1e7; ++i) {
+    // ...
+  }
+}
+```
+
+С помощью такой конструкции мы можем разбить выполнение циклов на несколько потоков.
+Если необходимо помимо разбиения сохранить общий результат выполнения (например, накопить общую сумму),
+то используется следующая конструкция:
+
+```cpp
+#pragma omp parallel for reduction(+:sum)
+{
+  for (int i = 0; i < 1e7; ++i) {
+    sum = sum + f(i);
+  }
+}
+
+// после выполнения в переменной sum будет результат сложения во всех потоках
+```
+
+### Барьеры
+
+Барьеры устанавливаются в тех участках кода, в которых необходимо синхронизировать все потоки. То есть
+по достижении барьера, поток будет ждать пока другие потоки также достигнут этого барьера,
+после чего выполнение работы продолжится.
+
+```cpp
+#pragma omp parallel
+{
+  std::cout << 1 << std::endl;
+  std::cout << 2 << std::endl;
+  #pragma omp barrier
+  std::cout << 3 << std::endl;
+}
+```
+
+### Single-запуск
+
+```cpp
+#pragma omp parallel
+{
+  std::cout << 1 << std::endl;
+  // выполнить один раз (какой-то из потоков выполнит последующий код)
+  #pragma omp single
+  {
+    std::cout << 2 << std::endl;
+  } // тут срабатывает барьер для все потоков
+
+  std::cout << 3 << std::endl;
+}
+```
+
+Если мы не хотим, чтобы был барьер:
+
+```cpp
+#pragma omp parallel
+{
+  std::cout << 1 << std::endl;
+
+  #pragma omp single nowait
+  {
+    std::cout << 2 << std::endl;
+  }
+
+  std::cout << 3 << std::endl;
+}
+```
+
+Если требуется, чтобы определенный код был выполнен только главным потоком, то используем
+следующую конструкцию:
+
+```cpp
+#pragma omp parallel
+{
+  std::cout << 1 << std::endl;
+
+  #pragma omp master
+  {
+    std::cout << 2 << std::endl;
+  }
+
+  std::cout << 3 << std::endl;
+}
+```
+
+### Упорядоченное выполнение
+
+Допустим у нас есть цикл и мы хотим последовательно выводить индексы действий:
+
+```cpp
+for (int i = 0; i < 1e7; ++i) {
+  std::cout << i << std::endl;
+}
+```
+
+Для распараллеливания этой задачи используем соотвествующую директиву `pragma omp parallel for` и
+добавляем модификатор `ordered`:
+
+```cpp
+#pragma omp parallel for ordered
+for (int i = 0; i < 1e7; ++i) {
+  #pragma omp ordered
+  {
+    std::cout << i << std::endl;
+  }
+}
+```
+
+В этом случае все потоки будут согласованы между собой и вывод индекса будет выполнен
+в нужном порядке.
+
+### Критическая секция
+
+Критическая секция может быть только одна в единицу времени.
+
+```cpp
+#pragma omp parallel
+{
+  #pragma omp critical
+  {
+    // Критическая секция
+  }
+}
+```
+
+При попадании в критическую секцию, все остальные потоки приостанавливают свое выполнение. После выхода одного
+потока из критической секции, другой поток продолжает свое выполнение и т.д.
+
+### Атомарные операции
+
+```cpp
+#pragma omp parallel
+{
+  #pragma omp atomic
+  n++;
+}
+```
+
+### Параллельное исполнение разного кода
+
+```cpp
+#pragma omp sections
+{
+  #pragma omp section
+  {
+    // action 1
+  }
+  #pragma omp section
+  {
+    // action 2
+  }
+  #pragma omp section
+  {
+    // action 3
+  }
+}
+```
+
+### Task-потоки
+
+```cpp
+#pragma omp task
+{
+  // Task
+}
+
+#pragma omp taskwait
+```
+
+*Полезные ссылки*:
+
+* [Основной сайт](http://openmp.org/wp/)
+﻿* [Полная спецификация](http://www.openmp.org/mp-documents/openmp-4.5.pdf﻿)
+* [Примеры](http://openmp.org/mp-documents/openmp-examples-4.0.2.pdf﻿)
+* [Статья в Википедии (есть пара примеров)](https://en.wikipedia.org/wiki/OpenMP﻿)
+
+## Intel TBB
+
+Документация:
+
+* [Основной сайт](https://www.threadingbuildingblocks.org/)
+﻿* [Документация](https://software.intel.com/en-us/node/506039)
+* Включает в себя:
+﻿﻿  - [﻿Developer Guide](https://software.intel.com/en-us/node/506045﻿)
+  - [﻿Developer Reference Manual](https://software.intel.com/en-us/node/506130﻿)
+﻿
+
+Функция `parallel_for` аналог `#pragma omp parallel for` в OpenMP.
+
+```cpp
+// исходная функция, которую хотим распараллелить
+void SerialApplyFoo(float a[], int n) {
+  for (size_t i = 0; i < n; ++i) {
+    Foo(a[i]);
+  }
+}
+
+// создание класса для применения функции Foo к массиву float a[]
+class ApplyFoo {
+  float *my_a;
+public:
+  void operator()(const tbb::blocked_range<size_t>& r) {
+    float *a = my_a;
+
+    for (size_t i = r.begin(); i != r.end(); ++i) {
+      Foo(a[i]);
+    }
+
+    ApplyFoo(float a[]) : my_a{a} {}
+  }
+};
+
+// запуск параллельных задач
+void ParallelApplyFoo(float a[], int n) {
+  // разбиение массива на блоки
+  tbb::parallel_for(tbb::blocked_range<size_t>(0, n), ApplyFoo(0, n));
+}
+```
+
+Эту запись можно сократить с помощью применения лямбда-функций:
+
+```cpp
+void ParallelApplyFoo(float a[], int n) {
+  auto Apply = [=](const tbb::blocked_range<size_t>& r) {
+    for (size_t i = r.begin(); i != r.end(); ++i) {
+      Foo(a[i]);
+    }
+  }
+
+  tbb::parallel_for(tbb::blocked_range<size_t>(0, n), Apply);
+}
+```
+
+### Разбиение на блоки
+
+```cpp
+// G/2 <= Chunck size (размер блока) < G
+// simple_partitioner() - функция для разбиения на блоки
+tbb::parallel_for(tbb::blocked_range<size_t>(0, n, G), ApplyFoo(a), simple_partitioner());
+```
+
+### Распаралеливание вычислений
+
+Допустим есть код, который считает сумму числе в массиве:
+
+```cpp
+float SerialSumFoo(float a[], size_t n) {
+  float sum = 0;
+
+  for (size_t i = 0; i < n; ++i) {
+    sum += a[i];
+  }
+
+  return sum;
+}
+```
+
+Допустим, мы хотим разделить наш массив на несколько частей, посчитать сумму для каждой части
+и затем объединить:
+
+```cpp
+class SumFoo {
+  float *my_a;
+public:
+  float my_sum;
+
+  void operator()(tbb::blocked_range<size_t>& r) {
+    float *a = my_a;
+    float sum = my_sum;
+    size_t end = r.end();
+
+    for (size_t i = r.begin(); i != end; ++i) {
+      sum += Foo(a[i]);
+    }
+
+    my_sum = sum;
+  }
+
+  SumFoo(SumFoo& x, split) : my_a{x.my_a}, my_sum{0} {}
+
+  void join(const SumFoo& y) {
+    my_sum += y.my_sum;
+  }
+
+  SumFoo(float a[]) : my_a{a}, my_sum{0} {}
+};
+
+float ParallelSumFoo(float a[], size_t n) {
+  SumFoo sf(a);
+
+  tbb::parallel_reduce(tbb::blocked_range<size_t>(0, n), sf);
+
+  return sf.my_sum;
+}
+```
