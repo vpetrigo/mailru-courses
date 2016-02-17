@@ -675,7 +675,7 @@ for (int i = 0; i < 1e7; ++i) {
 *Полезные ссылки*:
 
 * [Основной сайт](http://openmp.org/wp/)
-﻿* [Полная спецификация](http://www.openmp.org/mp-documents/openmp-4.5.pdf﻿)
+* [Полная спецификация](http://www.openmp.org/mp-documents/openmp-4.5.pdf﻿)
 * [Примеры](http://openmp.org/mp-documents/openmp-examples-4.0.2.pdf﻿)
 * [Статья в Википедии (есть пара примеров)](https://en.wikipedia.org/wiki/OpenMP﻿)
 
@@ -684,10 +684,10 @@ for (int i = 0; i < 1e7; ++i) {
 Документация:
 
 * [Основной сайт](https://www.threadingbuildingblocks.org/)
-﻿* [Документация](https://software.intel.com/en-us/node/506039)
+* [Документация](https://software.intel.com/en-us/node/506039)
 * Включает в себя:
-﻿﻿  - [﻿Developer Guide](https://software.intel.com/en-us/node/506045﻿)
-  - [﻿Developer Reference Manual](https://software.intel.com/en-us/node/506130﻿)
+  * [﻿Developer Guide](https://software.intel.com/en-us/node/506045﻿)
+  * [﻿Developer Reference Manual](https://software.intel.com/en-us/node/506130﻿)
 ﻿
 
 Функция `parallel_for` аналог `#pragma omp parallel for` в OpenMP.
