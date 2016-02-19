@@ -2,61 +2,84 @@
 #include <iterator>
 #include <vector>
 #include <algorithm>
+#include <cstddef>
+#include <fstream>
 #include "tbb/parallel_for.h"
+#include "tbb/parallel_invoke.h"
 
-void Foo(float num) {
-  std::cout << "Num: " << num << std::endl;
-}
-
-void ParallelApplyFoo(float a[], int n) {
-  auto Apply = [=](const tbb::blocked_range<size_t>& r) {
-    for (size_t i = r.begin(); i != r.end(); ++i) {
-      Foo(a[i]);
-    }
-  };
-
-  tbb::parallel_for(tbb::blocked_range<size_t>(0, n), Apply);
-}
-
-template <typename It>
-std::vector<typename std::iterator_traits<It>::value_type> merge(It& begin, It& mid, It& end) {
-  auto first_begin = begin;
-  auto second_begin = mid;
+void Merge(int *data, int left, int mid, int right) {
+  int sorted_data[right - left + 1];
+  std::size_t sorted_idx = 0;
+  auto first_begin = left;
   const auto first_end = mid;
-  const auto second_end = end;
-  std::vector<typename std::iterator_traits<It>::value_type> v;
+  auto second_begin = mid + 1;
+  const auto second_end = right;
 
-  while (first_begin != first_end && second_begin != second_end) {
-    if (*first_begin <= *second_begin) {
-      v.emplace_back(*first_begin++);
+  while (first_begin <= first_end && second_begin <= second_end) {
+    if (data[first_begin] <= data[second_begin]) {
+      sorted_data[sorted_idx++] = data[first_begin++];
     }
     else {
-      v.emplace_back(*second_begin++);
+      sorted_data[sorted_idx++] = data[second_begin++];
     }
   }
 
-  std::copy_backward(first_begin, first_end, v.end());
-  std::copy_backward(second_begin, second_end, v.end());
+  while (first_begin <= first_end) {
+    sorted_data[sorted_idx++] = data[first_begin++];
+  }
 
-  return v;
+  while (second_begin <= second_end) {
+    sorted_data[sorted_idx++] = data[second_begin++];
+  }
+
+  for (std::size_t i = 0; i < sorted_idx; ++i) {
+    data[left + i] = sorted_data[i];
+  }
 }
 
-template <typename It>
-void merge_sort(It& begin, It& end) {
-  auto size = std::distance(begin, end);
-
-  if (size > 1) {
-    auto mid = std::advance(begin, size / 2);
-    merge_sort(begin, mid);
-    merge_sort(mid, end);
-    merge(begin, mid, end);
+void MergeSort(int *data, int left, int right) {
+  if (left < right) {
+    auto mid = left + (right - left) / 2;
+    tbb::parallel_invoke([=]() { MergeSort(data, left, mid); }, [=]() { MergeSort(data, mid + 1, right); });
+    Merge(data, left, mid, right);
   }
 }
 
 int main() {
-  float arr[] = {0.3, .4, .5, .1, 2.3, 4.123};
+  const std::string filename{"dataset_12656_4.txt"};
+  std::ifstream ifs{filename};
+  std::ofstream ofs{"out.txt"};
+  std::ofstream ofs_fine{"fine.txt"};
+  constexpr std::size_t arr_size= 1e5;
+  std::size_t elem_q = 0;
+  int array[arr_size];
+  int array2[arr_size];
 
-  ParallelApplyFoo(arr, sizeof arr / sizeof arr[0]);
+  int elem;
+
+  while (ifs >> elem) {
+    array[elem_q++] = elem;
+    array2[elem_q - 1] = array[elem_q - 1];
+  }
+
+  MergeSort(array, 0, elem_q - 1);
+  std::sort(array2, array2 + elem_q);
+
+  for (std::size_t i = 0; i < elem_q; ++i) {
+    ofs << array[i];
+    if (i + 1 != elem_q) {
+      ofs << ' ';
+    }
+  }
+  ofs << std::endl;
+
+  for (std::size_t i = 0; i < elem_q; ++i) {
+    ofs_fine << array2[i];
+    if (i + 1 != elem_q) {
+      ofs_fine << ' ';
+    }
+  }
+  ofs_fine << std::endl;
 
   return 0;
 }
