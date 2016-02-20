@@ -798,3 +798,9 @@ float ParallelSumFoo(float a[], size_t n) {
   return sf.my_sum;
 }
 ```
+
+## MPI
+
+* [Вся документация по MPI](http://www.mpi-forum.org/docs/docs.html)
+* [Основной документ (огромный)](http://www.mpi-forum.org/docs/mpi-3.1/mpi31-report.pdf)
+* [Документация с сайтам MPICH](https://www.mpich.org/documentation/guides/﻿)
