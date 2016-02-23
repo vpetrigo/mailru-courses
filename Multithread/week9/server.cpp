@@ -57,24 +57,26 @@ void print_incoming_info(const uv_tcp_t *handle) {
 
 void accept_conn(uv_work_t *req) {
     // do stuff with incoming peers
+    uv_stream_t *inc_stream = reinterpret_cast<uv_stream_t *> (new uv_tcp_t);
+
+    uv_tcp_init(req->loop, reinterpret_cast<uv_tcp_t *> (inc_stream));
+    inc_stream->data = req->data;
+    uv_accept(static_cast<uv_stream_t *> (req->data), inc_stream);
+    print_incoming_info(reinterpret_cast<uv_tcp_t *> (inc_stream));
+    uv_read_start(inc_stream, alloc_fun, after_read);
 }
 
 void after_accept(uv_work_t *req, int status) {
     // clean worker
+    delete req;
 }
 
 void new_connection_handler(uv_stream_t *server, int status) {
     std::cout << "Incoming connection" << std::endl;
     uv_work_t *req = new uv_work_t;
 
+    req->data = server;
     uv_queue_work(server->loop, req, accept_conn, after_accept);
-    uv_stream_t *inc_stream = reinterpret_cast<uv_stream_t *> (new uv_tcp_t);
-
-    uv_tcp_init(server->loop, reinterpret_cast<uv_tcp_t *> (inc_stream));
-    inc_stream->data = server;
-    uv_accept(server, inc_stream);
-    print_incoming_info(reinterpret_cast<uv_tcp_t *> (inc_stream));
-    uv_read_start(inc_stream, alloc_fun, after_read);
 }
 
 uv_loop_t *create_loop() {
