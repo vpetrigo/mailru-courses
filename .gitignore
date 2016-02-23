@@ -2,3 +2,4 @@
 *.o
 *.exe
 *.txt
+!Multithread/week8/dataset_12656_4.txt
