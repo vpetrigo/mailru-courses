@@ -9,6 +9,13 @@
 constexpr char any_addr[] = "0.0.0.0";
 uv_tcp_t *tcp_server = nullptr;
 
+struct HTTP_req {
+    HTTP_req(uv_tcp_t *s, const char *r) : stream{s}, req{r} {}
+    
+    uv_tcp_t *stream;
+    const char *req;
+};
+
 // free memory allocated for peer connection
 void on_close(uv_handle_t *peer) {
     delete peer;
@@ -19,10 +26,29 @@ void after_shutdown(uv_shutdown_t *req, int status) {
     delete req;
 }
 
+void http_req(uv_work_t *req) {
+    std::cout << "HTTP req: " << static_cast<HTTP_req *> (req->data)->req << std::endl;
+}
+
+void http_resp(uv_work_t *req, int status) {
+    uv_write_t wreq;
+    HTTP_req *hr = static_cast<HTTP_req *> (req->data);
+    uv_buf_t to_send = { .base = "got it", .len = 6 };   
+
+    uv_write(&wreq, reinterpret_cast<uv_stream_t *> (hr->stream), &to_send, 1, nullptr);
+    // free work request
+    delete req;
+}
+
 void after_read(uv_stream_t *stream, ssize_t nread, const uv_buf_t *buf) {
     if (nread > 0) {
         std::cout << "received " << nread << " bytes" << std::endl;
         std::cout << "Payload: " << buf->base << std::endl;
+        uv_work_t *process_req = new uv_work_t;
+        
+        // add pointer to an incoming request message
+        process_req->data = new HTTP_req(reinterpret_cast<uv_tcp_t *> (stream), buf->base);
+        uv_queue_work(stream->loop, process_req, http_req, http_resp);
     }
     else if (nread < 0) {
         std::cout << "Shutdown connection..." << std::endl;
