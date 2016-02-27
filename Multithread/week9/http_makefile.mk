@@ -6,7 +6,7 @@ PARSER_OBJ = "..\..\..\http-parser\http_parser.o"
 OBJ = http_server.o http_parser.o
 LIB_PATH = "..\..\..\libuv"
 LIBUV_INC_DIR = "..\..\..\libuv\include"
-PARSER_INC_DIR = ""..\..\..\http_parser"
+PARSER_INC_DIR = "..\..\..\http-parser"
 
 all: $(OBJ)
 	clang++ -o http_server.exe $(OBJ) -L $(LIB_PATH) -luv -lws2_32 -lpsapi -liphlpapi -luserenv
