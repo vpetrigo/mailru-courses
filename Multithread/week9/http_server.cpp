@@ -3,6 +3,8 @@
 #include <sstream>
 #include <iomanip>
 #include <fstream>
+#include <utility>
+#include <unistd.h>
 #ifdef _WIN32
   #include <winsock2.h>
 #else
@@ -20,7 +22,11 @@
 #define LOG(msg) \
   std::cout << msg << std::endl
 
-const std::string http_404 {"HTTP/1.0 404 Not Found\r\nContent-Type: text/html\r\n\r\n<b>Bad request</b>\r\n"};
+const std::string http_404 {
+  R"(HTTP/1.0 404 Not Found
+Content-Type: text/html
+<b>Bad request</b>
+)"};
 
 class HTTP_request_parser {
 public:
@@ -105,11 +111,20 @@ public:
 
   template <typename Path>
   void set_path(Path&& p) noexcept {
-    path = std::move(p);
+    path = std::forward<Path>(p);
+  }
+
+  template <typename Path>
+  void set_server_dir(Path&& sd) noexcept {
+    server_dir = std::forward<Path>(sd);
   }
 
   const std::string& get_path() const noexcept {
     return path;
+  }
+
+  const std::string& get_server_dir() const noexcept {
+    return server_dir;
   }
 
   uv_write_t& get_write_req() noexcept {
@@ -121,6 +136,7 @@ private:
   uv_write_t write_req;
   HTTP_request_parser rp;
   std::string path;
+  std::string server_dir;
 };
 
 int HTTP_request_parser::on_url(http_parser *hp, const char *at, size_t length) {
@@ -133,13 +149,8 @@ int HTTP_request_parser::on_url(http_parser *hp, const char *at, size_t length) 
   HTTP_client *cptr = reinterpret_cast<HTTP_client *> (reinterpret_cast<uv_tcp_t *> (hp->data)->data);
 
   LOG("URL: " + std::string (at, length));
-  if (url_p.field_set & (1 << UF_QUERY)) {
-    cptr->set_path("/");
-  }
-  else {
-    cptr->set_path(std::string{at + url_p.field_data[UF_PATH].off, url_p.field_data[UF_PATH].len});
-    std::cout << cptr->get_path() << std::endl;
-  }
+  cptr->set_path(std::string{at + url_p.field_data[UF_PATH].off, url_p.field_data[UF_PATH].len});
+  std::cout << cptr->get_path() << std::endl;
 
   return 0;
 }
@@ -169,7 +180,10 @@ void render_resp(uv_work_t *req) {
   HTTP_client *cptr = reinterpret_cast<HTTP_client *> (req->data);
   uv_stream_t *client_stream = reinterpret_cast<uv_stream_t *> (cptr->get_handle());
   uv_buf_t buf;
-  std::string filepath = "." + cptr->get_path();
+  std::string *response = nullptr;
+  std::string filepath = cptr->get_server_dir() + cptr->get_path();
+
+  std::cout << filepath << std::endl;
   if (cptr->get_path() == "/" || access(filepath.c_str(), R_OK)) {
     buf = uv_buf_init(const_cast<char *> (http_404.c_str()), http_404.size());
   }
@@ -183,10 +197,15 @@ void render_resp(uv_work_t *req) {
     std::string http_200 {"HTTP/1.0 200 OK\r\nContent-Type: text/html\r\nConnection: keep-alive\r\n"};
     http_200.append("Content-Length: " + std::to_string(filedata.size()) + "\r\n");
     http_200.append("Access-Control-Allow-Origin: *\r\n\r\n");
-    buf = uv_buf_init(const_cast<char *> ((http_200 + filedata).c_str()), (http_200 + filedata).size());
+    response = new std::string{http_200 + filedata};
+    buf = uv_buf_init(const_cast<char *> (response->c_str()), response->size());
   }
   int status = uv_write(&cptr->get_write_req(), client_stream, &buf, 1, on_write);
   CHECK(status, "write cannot be done");
+
+  if (response) {
+    delete response;
+  }
 }
 
 void after_render(uv_work_t *req, int status) {
@@ -206,12 +225,13 @@ int HTTP_request_parser::on_message_complete(http_parser *hp) {
 
 class HTTP_server {
 public:
-  HTTP_server(uv_loop_t *l, const std::string& ip, int port) : loop{l} {
+  HTTP_server(uv_loop_t *l, const std::string& ip, int port, const std::string s_d) : loop{l}, server_dir{s_d} {
     // keepalive interval
     constexpr unsigned int delay = 60;
     struct sockaddr_in sa = {0};
     int status = uv_ip4_addr(ip.c_str(), port, &sa);
 
+    server.data = &server_dir;
     CHECK(status, "cannot convert IP4 address");
     status = uv_tcp_init(loop, &server);
     CHECK(status, "cannot init TCP session");
@@ -229,6 +249,7 @@ public:
 private:
   uv_tcp_t server;
   uv_loop_t *loop;
+  std::string server_dir;
 
   // callbacks
   static void on_connect(uv_stream_t *server, int status) {
@@ -237,6 +258,7 @@ private:
     std::cout << "new connection" << std::endl;
     uv_tcp_t *client_handle = cptr->get_handle();
 
+    cptr->set_server_dir(*reinterpret_cast<std::string *> (server->data));
     // store pointer to the whole HTTP_client class for further usage
     client_handle->data = cptr;
     status = uv_tcp_init(server->loop, client_handle);
@@ -288,9 +310,61 @@ private:
   }
 };
 
-int main() {
+struct Server_options {
+  Server_options() : ip{"0.0.0.0"}, port{8000}, home_dir{"."} {}
+
+  void set_ip(std::string _ip) noexcept {
+    ip = _ip;
+  }
+
+  void set_port(const int _port) noexcept {
+    port = _port;
+  }
+
+  void set_home_dir(std::string _home_dir) {
+    home_dir = _home_dir;
+  }
+
+  std::string ip;
+  int port;
+  std::string home_dir;
+};
+
+// we must handle the following arguments:
+// "-h" : host IP address
+// "-p" : host port
+// "-d" : host home directory
+Server_options parse_args(int argc, char *argv[]) {
+  constexpr char serv_set[] = "h:p:d:";
+  char option = '\0';
+  Server_options so;
+
+  while ((option = getopt(argc, argv, serv_set)) != -1) {
+    switch (option) {
+      case 'h':
+        so.set_ip(optarg);
+        break;
+      case 'p':
+        so.set_port(std::stoi(optarg));
+        break;
+      case 'd':
+        so.set_home_dir(optarg);
+        break;
+      default:
+        std::cerr << "Cannot parse args" << std::endl;
+        exit(1);
+    }
+  }
+
+  LOG("Server parameters: " + so.ip + " " + std::to_string(so.port) + " " + so.home_dir);
+
+  return so;
+}
+
+int main(int argc, char *argv[]) {
+  Server_options params = parse_args(argc, argv);
   uv_loop_t *loop = uv_default_loop();
-  HTTP_server hs{loop, "0.0.0.0", 9999};
+  HTTP_server hs{loop, params.ip, params.port, params.home_dir};
 
   uv_run(loop, UV_RUN_DEFAULT);
   uv_loop_close(loop);
