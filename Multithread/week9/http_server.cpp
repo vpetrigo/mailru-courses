@@ -4,8 +4,10 @@
 #include <iomanip>
 #include <fstream>
 #include <utility>
+#include <stdexcept>
 #include <unistd.h>
 #include <sys/types.h>
+#include <sys/stat.h>
 #ifdef _WIN32
   #include <winsock2.h>
 #else
@@ -26,7 +28,7 @@
 const std::string http_404 {
   R"(HTTP/1.0 404 Not Found
 Content-Type: text/html
-Contetn-Length: 19
+Content-Length: 19
 
 <b>Bad request</b>
 )"};
@@ -185,23 +187,33 @@ void render_resp(uv_work_t *req) {
   uv_buf_t buf;
   std::string *response = nullptr;
   std::string filepath = cptr->get_server_dir() + cptr->get_path();
-
+  
   std::cout << filepath << std::endl;
+  
   if (cptr->get_path() == "/" || access(filepath.c_str(), R_OK)) {
     buf = uv_buf_init(const_cast<char *> (http_404.c_str()), http_404.size());
   }
   else {
-    std::cout << "Exists" << std::endl;
-    std::ifstream ifs{filepath, std::ios::ate | std::ios::binary};
-    std::string filedata(ifs.tellg(), '\0');
-    // rewind at the begining
-    ifs.seekg(0);
-    filedata.assign(std::istreambuf_iterator<char> {ifs}, std::istreambuf_iterator<char> {});
-    std::string http_200 {"HTTP/1.0 200 OK\r\nContent-Type: text/html\r\nConnection: keep-alive\r\n"};
-    http_200.append("Content-Length: " + std::to_string(filedata.size()) + "\r\n");
-    http_200.append("Access-Control-Allow-Origin: *\r\n\r\n");
-    response = new std::string{http_200 + filedata};
-    buf = uv_buf_init(const_cast<char *> (response->c_str()), response->size());
+    struct stat info;
+
+    stat(filepath.c_str(), &info);
+
+    if (S_ISDIR(info.st_mode)) {
+      buf = uv_buf_init(const_cast<char *> (http_404.c_str()), http_404.size());
+    }
+    else {
+      std::cout << "Exists" << std::endl;
+      std::ifstream ifs{filepath, std::ios::ate | std::ios::binary};
+      std::string filedata(ifs.tellg(), '\0');
+      // rewind at the begining
+      ifs.seekg(0);
+      filedata.assign(std::istreambuf_iterator<char> {ifs}, std::istreambuf_iterator<char> {});
+      std::string http_200 {"HTTP/1.0 200 OK\r\nContent-Type: text/html\r\nConnection: keep-alive\r\n"};
+      http_200.append("Content-Length: " + std::to_string(filedata.size()) + "\r\n");
+      http_200.append("Access-Control-Allow-Origin: *\r\n\r\n");
+      response = new std::string{http_200 + filedata};
+      buf = uv_buf_init(const_cast<char *> (response->c_str()), response->size());
+    }
   }
   int status = uv_write(&cptr->get_write_req(), client_stream, &buf, 1, on_write);
   CHECK(status, "write cannot be done");
@@ -359,7 +371,7 @@ Server_options parse_args(int argc, char *argv[]) {
     }
   }
 
-  LOG("Server parameters: " + so.ip + " " + std::to_string(so.port) + " " + so.home_dir);
+//  LOG("Server parameters: " + so.ip + " " + std::to_string(so.port) + " " + so.home_dir);
 
   return so;
 }
@@ -374,7 +386,7 @@ int main(int argc, char *argv[]) {
     exit(2);
   }
   else if (pid > 0) {
-    std::cout << "Succesfully created new child process. Exiting." << std::endl;
+//    std::cout << "Succesfully created new child process. Exiting." << std::endl;
     exit(0);
   }
   // setting all files permissions created by process for all
