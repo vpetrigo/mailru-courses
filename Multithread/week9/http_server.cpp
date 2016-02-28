@@ -33,9 +33,9 @@ Content-Length: 19
 <b>Bad request</b>
 )"};
 
-class HTTP_request_parser {
+class Req_parser {
 public:
-  HTTP_request_parser(uv_tcp_t *stream) {
+  Req_parser(uv_tcp_t *stream) {
     http_parser_settings_init(&parser_settings);
     http_parser_init(&parser, HTTP_REQUEST);
     parser_settings.on_url = on_url;
@@ -92,15 +92,15 @@ private:
   static int on_message_complete(http_parser *hp);
 };
 
-class HTTP_client {
+class Client_Impl {
 public:
-  HTTP_client() : rp{&handle}, path{} {
+  Client_Impl() : rp{&handle}, path{} {
     handle.data = this;
     write_req.data = &handle;
   }
 
-  HTTP_client(const HTTP_client& c) = delete;
-  HTTP_client& operator=(const HTTP_client& c) = delete;
+  Client_Impl(const Client_Impl& c) = delete;
+  Client_Impl& operator=(const Client_Impl& c) = delete;
 
   uv_tcp_t *get_handle() noexcept {
     return &handle;
@@ -139,19 +139,19 @@ public:
 private:
   uv_tcp_t handle;
   uv_write_t write_req;
-  HTTP_request_parser rp;
+  Req_parser rp;
   std::string path;
   std::string server_dir;
 };
 
-int HTTP_request_parser::on_url(http_parser *hp, const char *at, size_t length) {
+int Req_parser::on_url(http_parser *hp, const char *at, size_t length) {
   struct http_parser_url url_p;
   // clean up new structure
   http_parser_url_init(&url_p);
   int status = http_parser_parse_url(at, length, false, &url_p);
   CHECK(status, "cannot parse url");
 
-  HTTP_client *cptr = reinterpret_cast<HTTP_client *> (reinterpret_cast<uv_tcp_t *> (hp->data)->data);
+  Client_Impl *cptr = reinterpret_cast<Client_Impl *> (reinterpret_cast<uv_tcp_t *> (hp->data)->data);
 
   LOG("URL: " + std::string (at, length));
   cptr->set_path(std::string{at + url_p.field_data[UF_PATH].off, url_p.field_data[UF_PATH].len});
@@ -161,7 +161,7 @@ int HTTP_request_parser::on_url(http_parser *hp, const char *at, size_t length) 
 }
 
 void close_after_wr(uv_handle_t *handle) {
-  HTTP_client *cptr = reinterpret_cast<HTTP_client *> (handle->data);
+  Client_Impl *cptr = reinterpret_cast<Client_Impl *> (handle->data);
 
   delete cptr;
 }
@@ -182,14 +182,14 @@ void on_write(uv_write_t* req, int status) {
 }
 
 void render_resp(uv_work_t *req) {
-  HTTP_client *cptr = reinterpret_cast<HTTP_client *> (req->data);
+  Client_Impl *cptr = reinterpret_cast<Client_Impl *> (req->data);
   uv_stream_t *client_stream = reinterpret_cast<uv_stream_t *> (cptr->get_handle());
   uv_buf_t buf;
   std::string *response = nullptr;
   std::string filepath = cptr->get_server_dir() + cptr->get_path();
-  
+
   std::cout << filepath << std::endl;
-  
+
   if (cptr->get_path() == "/" || access(filepath.c_str(), R_OK)) {
     buf = uv_buf_init(const_cast<char *> (http_404.c_str()), http_404.size());
   }
@@ -227,8 +227,8 @@ void after_render(uv_work_t *req, int status) {
   delete req;
 }
 
-int HTTP_request_parser::on_message_complete(http_parser *hp) {
-  HTTP_client *cptr = reinterpret_cast<HTTP_client *> (reinterpret_cast<uv_tcp_t *> (hp->data)->data);
+int Req_parser::on_message_complete(http_parser *hp) {
+  Client_Impl *cptr = reinterpret_cast<Client_Impl *> (reinterpret_cast<uv_tcp_t *> (hp->data)->data);
   uv_work_t *render_req = new uv_work_t;
 
   render_req->data = cptr;
@@ -238,9 +238,9 @@ int HTTP_request_parser::on_message_complete(http_parser *hp) {
   return 0;
 }
 
-class HTTP_server {
+class Server_Impl {
 public:
-  HTTP_server(uv_loop_t *l, const std::string& ip, int port, const std::string s_d) : loop{l}, server_dir{s_d} {
+  Server_Impl(uv_loop_t *l, const std::string& ip, int port, const std::string s_d) : loop{l}, server_dir{s_d} {
     // keepalive interval
     constexpr unsigned int delay = 60;
     struct sockaddr_in sa = {0};
@@ -259,8 +259,8 @@ public:
     LOG("Listen on " + ip + ":" + std::to_string(port));
   }
 
-  HTTP_server(const HTTP_server& s) = delete;
-  HTTP_server& operator=(const HTTP_server& s) = delete;
+  Server_Impl(const Server_Impl& s) = delete;
+  Server_Impl& operator=(const Server_Impl& s) = delete;
 private:
   uv_tcp_t server;
   uv_loop_t *loop;
@@ -269,12 +269,12 @@ private:
   // callbacks
   static void on_connect(uv_stream_t *server, int status) {
     CHECK(status, "bad connection");
-    HTTP_client *cptr = new HTTP_client;
+    Client_Impl *cptr = new Client_Impl;
     std::cout << "new connection" << std::endl;
     uv_tcp_t *client_handle = cptr->get_handle();
 
     cptr->set_server_dir(*reinterpret_cast<std::string *> (server->data));
-    // store pointer to the whole HTTP_client class for further usage
+    // store pointer to the whole Client_Impl class for further usage
     client_handle->data = cptr;
     status = uv_tcp_init(server->loop, client_handle);
     CHECK(status, "cannot init client connection");
@@ -285,7 +285,7 @@ private:
 
   // handle reading from stream
   static void on_read(uv_stream_t *peer, ssize_t nread, const uv_buf_t *buf) {
-    HTTP_client *cptr = static_cast<HTTP_client *> (peer->data);
+    Client_Impl *cptr = static_cast<Client_Impl *> (peer->data);
 
     if (nread >= 0) {
       // get HTTP request and parse it
@@ -314,7 +314,7 @@ private:
 
   // handle close request
   static void on_close(uv_handle_t *peer) {
-    HTTP_client *cptr = static_cast<HTTP_client *> (peer->data);
+    Client_Impl *cptr = static_cast<Client_Impl *> (peer->data);
     LOG("close client connection");
     delete cptr;
   }
@@ -391,21 +391,21 @@ int main(int argc, char *argv[]) {
   }
   // setting all files permissions created by process for all
   umask(0);
-    
+
   std::ofstream ofs{"server.log"};
 
   std::cout.rdbuf(ofs.rdbuf());
   std::cerr.rdbuf(ofs.rdbuf());
 
   pid_t sid = setsid();
-  
+
   if (sid < 0) {
     std::cerr << "Cannot obtain SID" << std::endl;
     exit (3);
   }
   close(STDIN_FILENO);
   uv_loop_t *loop = uv_default_loop();
-  HTTP_server hs{loop, params.ip, params.port, params.home_dir};
+  Server_Impl hs{loop, params.ip, params.port, params.home_dir};
 
   uv_run(loop, UV_RUN_DEFAULT);
   uv_loop_close(loop);
