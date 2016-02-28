@@ -5,6 +5,7 @@
 #include <fstream>
 #include <utility>
 #include <unistd.h>
+#include <sys/types.h>
 #ifdef _WIN32
   #include <winsock2.h>
 #else
@@ -25,6 +26,8 @@
 const std::string http_404 {
   R"(HTTP/1.0 404 Not Found
 Content-Type: text/html
+Contetn-Length: 19
+
 <b>Bad request</b>
 )"};
 
@@ -363,6 +366,32 @@ Server_options parse_args(int argc, char *argv[]) {
 
 int main(int argc, char *argv[]) {
   Server_options params = parse_args(argc, argv);
+
+  pid_t pid = fork();
+
+  if (pid < 0) {
+    std::cerr << "Cannot create child process" << std::endl;
+    exit(2);
+  }
+  else if (pid > 0) {
+    std::cout << "Succesfully created new child process. Exiting." << std::endl;
+    exit(0);
+  }
+  // setting all files permissions created by process for all
+  umask(0);
+    
+  std::ofstream ofs{"server.log"};
+
+  std::cout.rdbuf(ofs.rdbuf());
+  std::cerr.rdbuf(ofs.rdbuf());
+
+  pid_t sid = setsid();
+  
+  if (sid < 0) {
+    std::cerr << "Cannot obtain SID" << std::endl;
+    exit (3);
+  }
+  close(STDIN_FILENO);
   uv_loop_t *loop = uv_default_loop();
   HTTP_server hs{loop, params.ip, params.port, params.home_dir};
 
